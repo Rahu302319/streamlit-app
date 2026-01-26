@@ -1,16 +1,11 @@
-# PyQt6 DeepSeek Chatbot (ChatGPT-style UI)
-# Requires: pip install PyQt6 requests
+# Streamlit DeepSeek Chatbot (ChatGPT-style Web App)
+# Requirements: pip install streamlit requests
 
-import sys
+import streamlit as st
 import requests
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QTextEdit, QLineEdit, QPushButton, QLabel, QScrollArea
-)
-from PyQt6.QtCore import Qt
 
 # ================= CONFIG =================
-API_KEY = "YOUR_NEW_API_KEY_HERE"
+API_KEY = "YOUR_NEW_API_KEY_HERE"   # 🔐 Put your OpenRouter API key here
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "deepseek/deepseek-chat"
 
@@ -22,141 +17,67 @@ HEADERS = {
 }
 # =========================================
 
-class ChatBubble(QLabel):
-    def __init__(self, text, is_user=False):
-        super().__init__(text)
-        self.setWordWrap(True)
-        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+st.set_page_config(page_title="Jarvis AI", page_icon="🤖", layout="centered")
 
-        if is_user:
-            self.setStyleSheet("""
-                background-color: #0b5ed7;
-                color: white;
-                padding: 10px;
-                border-radius: 12px;
-                max-width: 400px;
-            """)
-            self.setAlignment(Qt.AlignmentFlag.AlignRight)
-        else:
-            self.setStyleSheet("""
-                background-color: #2b2b2b;
-                color: white;
-                padding: 10px;
-                border-radius: 12px;
-                max-width: 400px;
-            """)
-            self.setAlignment(Qt.AlignmentFlag.AlignLeft)
+st.title("🤖 Jarvis AI")
+st.caption("Powered by DeepSeek via OpenRouter")
 
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": "You are Jarvis, a helpful AI assistant."}
+    ]
 
-class ChatWindow(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Jarvis - DeepSeek AI")
-        self.resize(700, 800)
+# Display chat history
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.chat_message("user").write(msg["content"])
+    elif msg["role"] == "assistant":
+        st.chat_message("assistant").write(msg["content"])
 
-        self.messages = [
-            {"role": "system", "content": "You are Jarvis, a helpful assistant."}
+# User input box
+user_input = st.chat_input("Type your message...")
+
+if user_input:
+    # Show user message
+    st.chat_message("user").write(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    payload = {
+        "model": MODEL,
+        "messages": st.session_state.messages
+    }
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            try:
+                response = requests.post(API_URL, headers=HEADERS, json=payload, timeout=60)
+
+                if response.status_code != 200:
+                    st.error("API Error: " + response.text)
+                else:
+                    data = response.json()
+                    reply = data["choices"][0]["message"]["content"]
+                    st.write(reply)
+
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": reply
+                    })
+
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+
+# Sidebar
+with st.sidebar:
+    st.header("⚙ Settings")
+
+    if st.button("🧹 Clear Chat"):
+        st.session_state.messages = [
+            {"role": "system", "content": "You are Jarvis, a helpful AI assistant."}
         ]
+        st.rerun()
 
-        self.init_ui()
-
-    def init_ui(self):
-        main_layout = QVBoxLayout(self)
-
-        title = QLabel("🤖 Jarvis AI (DeepSeek)")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; padding: 10px;")
-        main_layout.addWidget(title)
-
-        # Scroll Area for chat
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-
-        self.chat_container = QWidget()
-        self.chat_layout = QVBoxLayout(self.chat_container)
-        self.chat_layout.addStretch()
-
-        self.scroll.setWidget(self.chat_container)
-        main_layout.addWidget(self.scroll)
-
-        # Input area
-        input_layout = QHBoxLayout()
-
-        self.input_box = QLineEdit()
-        self.input_box.setPlaceholderText("Type your message...")
-        self.input_box.returnPressed.connect(self.send_message)
-
-        self.send_btn = QPushButton("Send")
-        self.send_btn.clicked.connect(self.send_message)
-
-        input_layout.addWidget(self.input_box)
-        input_layout.addWidget(self.send_btn)
-
-        main_layout.addLayout(input_layout)
-
-        self.setStyleSheet("""
-            QWidget { background-color: #121212; color: white; }
-            QLineEdit { padding: 8px; border-radius: 8px; background: #1e1e1e; }
-            QPushButton { padding: 8px 15px; border-radius: 8px; background: #0b5ed7; color: white; }
-            QPushButton:hover { background: #0a53be; }
-        """)
-
-    def add_message(self, text, is_user=False):
-        bubble = ChatBubble(text, is_user)
-
-        wrapper = QWidget()
-        layout = QHBoxLayout(wrapper)
-
-        if is_user:
-            layout.addStretch()
-            layout.addWidget(bubble)
-        else:
-            layout.addWidget(bubble)
-            layout.addStretch()
-
-        self.chat_layout.insertWidget(self.chat_layout.count() - 1, wrapper)
-
-        QApplication.processEvents()
-        self.scroll.verticalScrollBar().setValue(
-            self.scroll.verticalScrollBar().maximum()
-        )
-
-    def send_message(self):
-        text = self.input_box.text().strip()
-        if not text:
-            return
-
-        self.input_box.clear()
-        self.add_message(text, True)
-
-        self.messages.append({"role": "user", "content": text})
-
-        self.get_ai_response()
-
-    def get_ai_response(self):
-        payload = {
-            "model": MODEL,
-            "messages": self.messages
-        }
-
-        try:
-            r = requests.post(API_URL, headers=HEADERS, json=payload, timeout=60)
-
-            if r.status_code != 200:
-                self.add_message("Error: API request failed")
-                return
-
-            data = r.json()
-            reply = data["choices"][0]["message"]["content"]
-
-            self.messages.append({"role": "assistant", "content": reply})
-            self.add_message(reply, False)
-
-        except Exception as e:
-            self.add_message(f"Error: {str(e)}")
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = ChatWindow()
-    window.show()
-    sys.exit(app.exec())
+    st.markdown("---")
+    st.markdown("**Model:** DeepSeek Chat")
+    st.markdown("**Platform:** OpenRouter")
