@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 # ---------------- CONFIG ----------------
-API_KEY = "k_5726942c2615.Ru4o2RnRMhojD1vr497bDFPuTPM5_1Cnjn5xc0qZvytZFBTLNPFzrA"   # <-- put your API key here
+API_KEY = "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"   # <-- put your API key here
 URL = "https://platform.qubrid.com/api/v1/qubridai/chat/completions"
 MODEL = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 
@@ -110,3 +110,4 @@ if user_input:
     # Save assistant message
     st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
     save_message("assistant", assistant_reply)
+
