@@ -51,7 +51,7 @@ if user_input:
         "model": MODEL,
         "messages": st.session_state.messages,
         "temperature": 0.7,
-        "max_tokens": 2048,
+        "max_tokens": 1000048,
         "stream": True,
         "top_p": 1
     }
