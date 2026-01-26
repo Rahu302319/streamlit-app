@@ -5,7 +5,7 @@ import streamlit as st
 import requests
 
 # ================= CONFIG =================
-API_KEY = "YOUR_NEW_API_KEY_HERE"   # 🔐 Put your OpenRouter API key here
+API_KEY = "sk-33854520720e4a5f92b2bcbf6e112d32"   # 🔐 Put your OpenRouter API key here
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "deepseek/deepseek-chat"
 
@@ -81,3 +81,4 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Model:** DeepSeek Chat")
     st.markdown("**Platform:** OpenRouter")
+
