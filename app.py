@@ -51,7 +51,7 @@ if user_input:
         "model": MODEL,
         "messages": st.session_state.messages,
         "temperature": 0.7,
-        "max_tokens": 500000,
+        "max_tokens": 2000,
         "stream": True,
         "top_p": 1
     }
@@ -89,4 +89,5 @@ if user_input:
     st.session_state.messages.append(
         {"role": "assistant", "content": assistant_reply}
     )
+
 
