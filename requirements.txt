@@ -3,4 +3,5 @@ mysql-connector-python
 pandas
 requests
 plotly
+requests
 numpy
