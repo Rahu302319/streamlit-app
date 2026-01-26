@@ -1,234 +1,243 @@
 import streamlit as st
 import requests
-import uuid
 import time
 import random
 
 # ---------------- CONFIGURATION ----------------
-# 🔒 NOTE: For a real app, use st.secrets. For now, this is fine for testing.
+# 🔒 You can stick your API key here or use st.secrets for production
 API_KEY = "k_5726942c2615.Ru4o2RnRMhojD1vr497bDFPuTPM5_1Cnjn5xc0qZvytZFBTLNPFzrA"
 URL = "https://platform.qubrid.com/api/v1/qubridai/chat/completions"
 MODEL = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="JARVIS",
-    page_icon="🤖",
+    page_title="Jarvis AI",
+    page_icon="✨",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ---------------- CUSTOM CSS (The "Cute" Style) ----------------
+# ---------------- 🎨 CUSTOM CSS (THE UI MAKEOVER) ----------------
 st.markdown("""
 <style>
-    /* General App Background */
-    .stApp {
-        background-color: #ffffff;
+    /* IMPORT FONT (Inter for a clean look) */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
     }
-    
-    /* Sidebar Styling (Dark Mode like ChatGPT) */
+
+    /* 1. HIDE DEFAULT STREAMLIT JUNK */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* 2. SIDEBAR STYLING (ChatGPT Dark Mode) */
     [data-testid="stSidebar"] {
         background-color: #202123;
-        color: white;
+        border-right: 1px solid #333;
     }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] p {
-        color: #ececf1 !important;
+    [data-testid="stSidebar"] * {
+        color: #ECECF1 !important;
+    }
+    /* Sidebar Inputs */
+    [data-testid="stSidebar"] input {
+        background-color: #40414F;
+        color: white;
+        border: 1px solid #565869;
+        border-radius: 6px;
     }
     
-    /* Input Fields in Sidebar */
-    [data-testid="stSidebar"] .stTextInput input {
-        color: #333;
-        background-color: #ffffff;
+    /* 3. MAIN CHAT AREA */
+    .stApp {
+        background-color: #343541; /* Dark Grey Background like ChatGPT */
+    }
+    
+    /* 4. CHAT BUBBLES */
+    .stChatMessage {
+        background-color: transparent;
+        border: none;
+    }
+    /* User Message Background */
+    div[data-testid="chat-message-user"] {
+        background-color: #343541; 
+        border-bottom: 1px solid #2A2B32;
+    }
+    /* AI Message Background */
+    div[data-testid="chat-message-assistant"] {
+        background-color: #444654; /* Slightly lighter grey */
+        border-bottom: 1px solid #2A2B32;
+    }
+    
+    /* Text Colors in Chat */
+    .stMarkdown p {
+        color: #ECECF1 !important;
+        font-size: 16px;
+        line-height: 1.6;
     }
 
-    /* Buttons */
+    /* 5. BUTTON STYLING */
     .stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        border: 1px solid #4d4d4f;
-        background-color: #343541;
+        background-color: #10a37f; /* ChatGPT Green */
         color: white;
-        transition: all 0.2s;
+        border: none;
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
     .stButton > button:hover {
-        background-color: #40414F;
-        border-color: #565869;
+        background-color: #0d8a6a;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* Secondary Buttons (Sidebar) */
+    [data-testid="stSidebar"] button {
+        background-color: #343541;
+        border: 1px solid #565869;
+    }
+    [data-testid="stSidebar"] button:hover {
+        background-color: #2A2B32;
     }
 
-    /* Chat Area */
-    .main-header {
-        text-align: center;
-        padding: 1rem;
-        color: #333;
-        margin-bottom: 2rem;
-    }
-    
-    /* Chat Bubbles */
-    .stChatMessage {
-        background-color: white;
-        border: 1px solid #e5e5e5;
+    /* 6. LOGIN CARD STYLING */
+    .login-container {
+        background-color: #ffffff;
+        padding: 3rem;
         border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        margin-bottom: 10px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        text-align: center;
+        max-width: 400px;
+        margin: 50px auto;
     }
-    .stChatMessage[data-testid="chat-message-user"] {
-        background-color: #f7f7f8;
+    .login-header {
+        color: #333;
+        font-weight: 700;
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
     }
     
-    /* Hide Default Header */
-    header {visibility: hidden;}
+    /* Input Field Styling in Main Area */
+    .stTextInput input {
+        border-radius: 8px;
+        padding: 10px;
+        border: 1px solid #ddd;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------- SESSION STATE ----------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-if "username" not in st.session_state:
-    st.session_state.username = None
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": "You are JARVIS, a helpful AI."}]
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = ["Previous Chat 1", "Project Ideas", "Recipes"]
+    st.session_state.messages = []
 
-# ---------------- HELPER FUNCTIONS ----------------
-def get_ai_response(messages):
-    """Fetches response from Qubrid API or falls back to mock data."""
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
+# ---------------- LOGIC ----------------
+
+def get_response(prompt, history):
+    # This keeps the app from crashing if the API key is wrong
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
     payload = {
-        "model": MODEL,
-        "messages": messages,
-        "max_tokens": 500,
-        "temperature": 0.7
+        "model": MODEL, 
+        "messages": [{"role": "system", "content": "You are a helpful assistant."}] + history,
+        "max_tokens": 1000
     }
-    
     try:
-        response = requests.post(URL, headers=headers, json=payload, timeout=8)
+        response = requests.post(URL, headers=headers, json=payload, timeout=5)
         if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
-        else:
-            return f"⚠️ API Error ({response.status_code}): {response.text}"
-    except Exception:
-        # Fallback for Demo Purposes
-        time.sleep(1)
-        return random.choice([
-            "I'm listening! Tell me more about that. 🌸",
-            "That's super interesting! I'm operating in demo mode right now, but I love chatting.",
-            "I'm experiencing some network hiccups, but I'm still here with you! 🤖",
-            "Could you explain that in a different way? I want to make sure I understand."
-        ])
-
-# ---------------- SIDEBAR LOGIC ----------------
-with st.sidebar:
-    st.markdown("## 🤖 J.A.R.V.I.S")
+            return response.json()['choices'][0]['message']['content']
+    except:
+        pass
     
-    if not st.session_state.authenticated:
-        # --- LOGIN / SIGNUP VIEW ---
-        st.markdown("---")
-        st.write("Please identify yourself:")
+    # Fallback "Cute" Responses if API fails
+    return random.choice([
+        "I'm thinking... 🤔",
+        "That's a great question! Tell me more.",
+        "I'm currently in demo mode, but I love chatting with you! ✨",
+        "Could you rephrase that? I want to help!"
+    ])
+
+# ---------------- APP LAYOUT ----------------
+
+if not st.session_state.authenticated:
+    # === LOGIN PAGE ===
+    # We use columns to center the login box perfectly
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col2:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background: white; padding: 40px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center;">
+            <h1 style="color: #333; margin-bottom: 0;">👋 Welcome</h1>
+            <p style="color: #666; margin-bottom: 20px;">Please sign in to continue</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        auth_mode = st.radio("Mode", ["Log In", "Sign Up"], horizontal=True, label_visibility="collapsed")
+        email = st.text_input("Email", placeholder="user@example.com")
+        password = st.text_input("Password", type="password", placeholder="••••••")
         
-        email = st.text_input("Email Address", placeholder="name@example.com")
-        password = st.text_input("Password", type="password", placeholder="••••••••")
-        
-        if st.button("✨ Continue", type="primary"):
+        if st.button("Sign In", use_container_width=True):
             if email and password:
-                with st.spinner("Authenticating..."):
-                    time.sleep(0.8)  # Simulate network delay
+                with st.spinner("Logging in..."):
+                    time.sleep(0.8)
                     st.session_state.authenticated = True
-                    st.session_state.username = email.split('@')[0].capitalize()
                     st.rerun()
             else:
-                st.warning("Please fill in both fields.")
-        
-        st.info("ℹ️ Tip: You can use any fake email to test the demo!")
-        
-    else:
-        # --- LOGGED IN VIEW ---
-        if st.button("➕ New Chat"):
-            st.session_state.messages = [{"role": "system", "content": "You are JARVIS."}]
-            st.rerun()
-            
-        st.markdown("### 🕒 Recent Chats")
-        for chat in st.session_state.chat_history:
-            st.button(f"💬 {chat}", key=chat)
-            
-        st.markdown("---")
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            st.markdown("👤")
-        with col2:
-            st.markdown(f"**{st.session_state.username}**")
-            
-        if st.button("Log Out"):
-            st.session_state.authenticated = False
+                st.warning("Please enter any email and password.")
+
+else:
+    # === CHAT INTERFACE ===
+    
+    # Sidebar
+    with st.sidebar:
+        st.markdown("### 🤖 New Chat")
+        if st.button("✨ Clear Conversation", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
+            
+        st.markdown("---")
+        st.markdown("### History")
+        st.caption("No previous history")
+        
+        st.markdown("---")
+        if st.button("🚪 Log Out", use_container_width=True):
+            st.session_state.authenticated = False
+            st.rerun()
 
-# ---------------- MAIN APPLICATION ----------------
-if not st.session_state.authenticated:
-    # --- LANDING PAGE (Logged Out) ---
-    st.markdown("""
-    <div style='text-align: center; margin-top: 100px;'>
-        <h1>👋 Welcome to JARVIS</h1>
-        <p style='color: #666; font-size: 1.2rem; margin-bottom: 30px;'>
-            Your intelligent, friendly, and helpful AI companion.
-        </p>
-        <div style='background: #f7f7f8; padding: 30px; border-radius: 15px; display: inline-block; border: 1px solid #e5e5e5;'>
-            <h3>👈 Get Started</h3>
-            <p>Please <b>Sign Up</b> or <b>Log In</b> using the sidebar on the left.</p>
+    # Main Chat Area
+    # If empty, show a welcome message
+    if not st.session_state.messages:
+        st.markdown("""
+        <div style="text-align: center; color: #ECECF1; margin-top: 50px;">
+            <h1>Jarvis AI</h1>
+            <p>Your intelligent companion. Ask me anything!</p>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-else:
-    # --- CHAT INTERFACE (Logged In) ---
-    
-    # 1. Header
-    st.markdown(f"""
-    <div class="main-header">
-        <h1>🤖 JARVIS</h1>
-        <p style='color: #888;'>Hello, <b>{st.session_state.username}</b>! How can I help you today?</p>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # 2. Chat History
-    # We use a container so the input bar stays fixed at bottom if needed
-    chat_container = st.container()
+    # Display Chat History
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"], avatar="👤" if msg["role"] == "user" else "🤖"):
+            st.markdown(msg["content"])
 
-    with chat_container:
-        for msg in st.session_state.messages:
-            if msg["role"] != "system":
-                with st.chat_message(msg["role"], avatar="👤" if msg["role"] == "user" else "🤖"):
-                    st.write(msg["content"])
-
-    # 3. Chat Input
+    # Chat Input
     if prompt := st.chat_input("Send a message..."):
-        # Display User Message
+        # Add User Message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar="👤"):
-            st.write(prompt)
+            st.markdown(prompt)
 
-        # Display Assistant Response
+        # Add AI Response
         with st.chat_message("assistant", avatar="🤖"):
             response_placeholder = st.empty()
-            full_response = ""
+            full_response = get_response(prompt, st.session_state.messages)
             
-            with st.spinner("Thinking..."):
-                full_response = get_ai_response(st.session_state.messages)
-            
-            # Simulate typing effect
-            for chunk in full_response.split(" "):
-                full_response += chunk + " "
-                # In a real app we'd build the string progressively, 
-                # but for this demo, just printing the final result looks cleaner
-                
-            response_placeholder.write(full_response)
+            # Simulate Typing
+            display_text = ""
+            for char in full_response:
+                display_text += char
+                if len(display_text) % 5 == 0: # Update every 5 chars for speed
+                    response_placeholder.markdown(display_text + "▌")
+                    time.sleep(0.005)
+            response_placeholder.markdown(display_text)
             
         st.session_state.messages.append({"role": "assistant", "content": full_response})
