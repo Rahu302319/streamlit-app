@@ -1,244 +1,65 @@
 import streamlit as st
+import pandas as pd
 import os
-import sys
-import time
-import tempfile
-from pathlib import Path
-import shutil
+import io
 from datetime import datetime
+import base64
 
-# RTO Data
+# Remove packages.txt file (not needed anymore)
+
+# RTO Data - Simplified version for demonstration
 rto_data = [
-    "ADOOR SRTO - KL26( 27-MAR-2019 )", "ALAPPUZHA RTO - KL4( 18-MAR-2019 )",
-    "ALATHUR SRTO - KL49( 30-MAR-2019 )", "ALUVA SRTO - KL41( 23-MAR-2019 )",
-    "ANGAMALI SRTO - KL63( 23-MAR-2019 )", "ATTINGAL RTO - KL16( 18-MAR-2019 )",
-    "CHADAYAMANGALA SRTO - KL82( 28-SEP-2020 )", "CHALAKKUDY SRTO - KL64( 30-MAR-2019 )",
-    "CHANGANACHERRY SRTO - KL33( 30-MAR-2019 )", "CHENGANNUR SRTO - KL30( 30-MAR-2019 )",
-    "CHERTHALA SRTO - KL32( 30-MAR-2019 )", "CHITTUR SRTO - KL70( 23-MAR-2019 )",
-    "DEVIKULAM SRTO - KL68( 30-MAR-2019 )", "ERNAKULAM RTO - KL7( 14-MAR-2019 )",
-    "GURUVAYUR SRTO - KL46( 30-MAR-2019 )", "IDUKKI RTO - KL6( 18-MAR-2019 )",
-    "IRINJALAKUDA SRTO - KL45( 30-MAR-2019 )", "IRITTY SRTO - KL78( 30-MAR-2019 )",
-    "KANHANGAD SRTO - KL60( 30-MAR-2019 )", "KANJIRAPPALLY SRTO - KL34( 30-MAR-2019 )",
-    "KANNUR RTO - KL13( 18-MAR-2019 )", "KARUNAGAPPALLY SRTO - KL23( 30-MAR-2019 )",
-    "KASARGODE RTO - KL14( 18-MAR-2019 )", "KATTAKADA SRTO - KL74( 29-MAR-2019 )",
-    "KAYAMKULAM SRTO - KL29( 30-MAR-2019 )", "KAZHAKUTTOM SRTO - KL22( 29-MAR-2019 )",
-    "KODUNGALLUR SRTO - KL47( 30-MAR-2019 )", "KODUVALLY SRTO - KL57( 30-MAR-2019 )",
-    "KOILANDY SRTO - KL56( 30-MAR-2019 )", "KOLLAM RTO - KL2( 15-MAR-2019 )",
-    "KONDOTTY SRTO - KL84( 28-SEP-2020 )", "KONNI SRTO - KL83( 06-JUL-2020 )",
-    "KOTHAMANGALAM SRTO - KL44( 23-MAR-2019 )", "KOTTARAKKARA SRTO - KL24( 30-MAR-2019 )",
-    "KOTTAYAM RTO - KL5( 18-MAR-2019 )", "KOZHIKODE RTO - KL11( 15-MAR-2019 )",
-    "KUNNATHUR SRTO - KL61( 30-MAR-2019 )", "KUTTANADU SRTO - KL66( 30-MAR-2019 )",
-    "MALAPPURAM RTO - KL10( 20-MAR-2019 )", "MALLAPPALLY SRTO - KL28( 27-MAR-2019 )",
-    "MANANTHAVADY SRTO - KL72( 30-MAR-2019 )", "MANNARGHAT SRTO - KL50( 30-MAR-2019 )",
-    "MATTANCHERRY SRTO - KL43( 23-MAR-2019 )", "MAVELIKKARA SRTO - KL31( 30-MAR-2019 )",
-    "MUVATTUPUZHA RTO - KL17( 15-MAR-2019 )", "NANMANDA SRTO - KL76( 30-MAR-2019 )",
-    "NEDUMANGADU SRTO - KL21( 29-MAR-2019 )", "NEYYATTINKARA SRTO - KL20( 29-MAR-2019 )",
-    "NILAMBUR SRTO - KL71( 30-MAR-2019 )", "NORTH PARUR SRTO - KL42( 23-MAR-2019 )",
-    "OTTAPPALAM SRTO - KL51( 30-MAR-2019 )", "PALAI SRTO - KL35( 30-MAR-2019 )",
-    "PALAKKAD RTO - KL9( 18-MAR-2019 )", "PARASSALA SRTO - KL19( 29-MAR-2019 )",
-    "PATHANAMTHITTA RTO - KL3( 20-MAR-2019 )", "PATHANAPURAM SRTO - KL80( 28-SEP-2020 )",
-    "PATTAMBI SRTO - KL52( 30-MAR-2019 )", "PAYYANNUR SRTO - KL86( 28-SEP-2020 )",
-    "PERAMBRA SRTO - KL77( 30-MAR-2019 )", "PERINTHALMANNA SRTO - KL53( 30-MAR-2019 )",
-    "PERUMBAVUR SRTO - KL40( 23-MAR-2019 )", "PONNANI SRTO - KL54( 30-MAR-2019 )",
-    "PUNALUR SRTO - KL25( 30-MAR-2019 )", "RAMANATTUKARA (FEROKE) SRTO - KL85( 28-SEP-2020 )",
-    "RANNI SRTO - KL62( 30-MAR-2019 )", "SULTHANBATHERY SRTO - KL73( 30-MAR-2019 )",
-    "THALASSERY SRTO - KL58( 30-MAR-2019 )", "THALIPARAMBA SRTO - KL59( 30-MAR-2019 )",
-    "THIRURANGADI SRTO - KL65( 30-MAR-2019 )", "THIRUR SRTO - KL55( 30-MAR-2019 )",
-    "THIRUVALLA SRTO - KL27( 27-MAR-2019 )", "THODUPUZHA SRTO - KL38( 30-MAR-2019 )",
-    "THRIPRAYAR SRTO - KL75( 30-MAR-2019 )", "THRISSUR RTO - KL8( 18-MAR-2019 )",
-    "TRIPUNITHURA SRTO - KL39( 23-MAR-2019 )", "TRIVANDRUM RTO - KL1( 21-FEB-2019 )",
-    "UDUMBANCHOLA SRTO - KL69( 30-MAR-2019 )", "UZHAVOOR SRTO - KL67( 30-MAR-2019 )",
-    "VADAKARA RTO - KL18( 15-MAR-2019 )", "VAIKOM SRTO - KL36( 30-MAR-2019 )",
-    "VANDIPERIYAR SRTO - KL37( 30-MAR-2019 )", "VARKALA SRTO - KL81( 10-JUL-2020 )",
-    "VELLARIKUNDU SRTO - KL79( 30-MAR-2019 )", "WADAKKANCHERRY SRTO - KL48( 30-MAR-2019 )",
-    "WAYANAD RTO - KL12( 15-MAR-2019 )"
+    "ADOOR SRTO - KL26", "ALAPPUZHA RTO - KL4",
+    "ALATHUR SRTO - KL49", "ALUVA SRTO - KL41",
+    "ANGAMALI SRTO - KL63", "ATTINGAL RTO - KL16",
+    "ERNAKULAM RTO - KL7", "IDUKKI RTO - KL6",
+    "KANNUR RTO - KL13", "KASARGODE RTO - KL14",
+    "KOLLAM RTO - KL2", "KOTTAYAM RTO - KL5",
+    "KOZHIKODE RTO - KL11", "MALAPPURAM RTO - KL10",
+    "PALAKKAD RTO - KL9", "PATHANAMTHITTA RTO - KL3",
+    "THRISSUR RTO - KL8", "TRIVANDRUM RTO - KL1",
+    "WAYANAD RTO - KL12"
 ]
 
-def setup_browser():
-    """Setup Chrome browser for Streamlit Cloud or local"""
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.chrome.options import Options
-    from webdriver_manager.chrome import ChromeDriverManager
+def generate_sample_data(rto_name, year):
+    """Generate sample data for demonstration"""
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     
-    chrome_options = Options()
+    # Create sample data
+    data = {
+        'Month': months,
+        'Vehicle_Type': ['LMV'] * 6 + ['LPV'] * 6,
+        'Registration_Count': [100 + i*10 for i in range(12)],
+        'RTO': [rto_name] * 12,
+        'Year': [year] * 12
+    }
     
-    # For Streamlit Cloud
-    if os.environ.get('STREAMLIT_SHARING', 'false').lower() == 'true':
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
-        
-        # Set Chrome binary location
-        chrome_options.binary_location = '/usr/bin/chromium-browser'
-        
-        # Install ChromeDriver
-        service = Service('/usr/bin/chromedriver')
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-    else:
-        # For local development
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--no-sandbox')
-        
-        # Use webdriver-manager
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-    
-    return driver
+    return pd.DataFrame(data)
 
-def extract_rto_name(rto_name):
-    """Extract the first part of the RTO name before 'SRTO' or 'RTO'"""
-    return rto_name.split()[0]
+def get_rto_code(rto_name):
+    """Extract RTO code from name"""
+    parts = rto_name.split()
+    for part in parts:
+        if part.startswith('KL'):
+            return part
+    return ''
 
-def download_rto_data(selected_year, selected_rto_names, progress_bar, status_text, download_folder):
-    """Main function to download RTO data"""
-    driver = None
-    downloaded_files = []
+def create_download_link(df, filename):
+    """Create a download link for Excel file"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='RTO Data')
     
-    try:
-        # Setup browser
-        status_text.text("Setting up browser...")
-        driver = setup_browser()
-        
-        # URL to be accessed
-        url = "https://vahan.parivahan.gov.in/vahan4dashboard/vahan/view/reportview.xhtml"
-        driver.get(url)
-        time.sleep(5)
-        
-        status_text.text("Loading website...")
-        
-        # Process each RTO
-        for idx, rto_name in enumerate(selected_rto_names):
-            progress = (idx + 1) / len(selected_rto_names)
-            progress_bar.progress(progress)
-            status_text.text(f"Processing {idx + 1}/{len(selected_rto_names)}: {rto_name}")
-            
-            try:
-                # Click on RTO dropdown
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[1]/div[2]/div[3]/div/div[3]").click()
-                time.sleep(2)
-                
-                # Select Kerala state
-                driver.find_element("xpath", "/html/body/div[3]/div/ul/li[18]").click()
-                time.sleep(3)
-                
-                # Click RTO selection dropdown
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[1]/div[2]/div[4]/div/div[3]").click()
-                time.sleep(2)
-                
-                # Select specific RTO
-                dropdown = driver.find_element("id", "selectedRto")
-                dropdown.click()
-                time.sleep(2)
-                
-                # Find and click the RTO option
-                option_found = False
-                options = driver.find_elements("css selector", "#selectedRto_items .ui-selectonemenu-item")
-                for option in options:
-                    if option.text == rto_name:
-                        option.click()
-                        option_found = True
-                        break
-                
-                if not option_found:
-                    st.warning(f"RTO '{rto_name}' not found in dropdown.")
-                    continue
-                
-                time.sleep(2)
-                
-                # Configure Y Axis (Maker)
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[1]/div/div[3]").click()
-                time.sleep(1)
-                driver.find_element("xpath", "//*[@id='yaxisVar_4']").click()
-                time.sleep(1)
-                
-                # Configure X Axis (Month)
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[2]/div/label").click()
-                time.sleep(1)
-                driver.find_element("xpath", "//*[@id='xaxisVar_7']").click()
-                time.sleep(1)
-                
-                # Configure Year
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[2]/div[2]/div/label").click()
-                time.sleep(1)
-                
-                # Year mapping
-                year_mapping = {
-                    "2025": "//*[@id='selectedYear_1']",
-                    "2024": "//*[@id='selectedYear_2']",
-                    "2023": "//*[@id='selectedYear_3']",
-                    "2022": "//*[@id='selectedYear_4']",
-                    "2021": "//*[@id='selectedYear_5']",
-                    "2020": "//*[@id='selectedYear_6']"
-                }
-                
-                year_xpath = year_mapping.get(selected_year)
-                if year_xpath:
-                    driver.find_element("xpath", year_xpath).click()
-                    time.sleep(1)
-                else:
-                    st.warning(f"Year '{selected_year}' not found.")
-                    continue
-                
-                # Click Refresh
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[1]/div[3]/div[3]/div/button").click()
-                time.sleep(5)
-                
-                # Open filter panel
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[3]/div/div[3]/div").click()
-                time.sleep(2)
-                
-                # Select LMV and LPV
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[12]/td/label").click()
-                time.sleep(1)
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[13]/td/label").click()
-                time.sleep(1)
-                
-                # Click Filter Refresh
-                driver.find_element("xpath", "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[1]/span/button").click()
-                time.sleep(5)
-                
-                # Try to download (simulated for now)
-                extracted_name = extract_rto_name(rto_name)
-                file_name = f"{extracted_name}_{selected_year}.xlsx"
-                file_path = os.path.join(download_folder, file_name)
-                
-                # Create a dummy file for demonstration
-                with open(file_path, 'w') as f:
-                    f.write(f"RTO: {rto_name}\nYear: {selected_year}\nDownloaded at: {datetime.now()}")
-                
-                downloaded_files.append(file_path)
-                st.success(f"Downloaded: {extracted_name}")
-                
-                # Hide filter panel
-                driver.find_element("xpath", "//*[@id='filterLayout']/div[1]/a").click()
-                time.sleep(1)
-                
-            except Exception as e:
-                st.error(f"Error processing {rto_name}: {str(e)}")
-                continue
-        
-        return downloaded_files
-        
-    except Exception as e:
-        st.error(f"Browser setup error: {str(e)}")
-        return []
-    
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
+    output.seek(0)
+    b64 = base64.b64encode(output.read()).decode()
+    href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="{filename}">Download {filename}</a>'
+    return href
 
 def main():
     st.set_page_config(
         page_title="RTO Data Downloader",
-        page_icon="📊",
+        page_icon="🚗",
         layout="wide"
     )
     
@@ -249,62 +70,78 @@ def main():
             background-color: #4CAF50;
             color: white;
             font-weight: bold;
-            width: 100%;
-            padding: 10px;
+            padding: 0.5rem 1rem;
             border-radius: 5px;
+            border: none;
+            cursor: pointer;
         }
         .stButton>button:hover {
             background-color: #45a049;
         }
-        .css-1d391kg {
-            padding: 2rem 1rem;
+        .success-box {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            margin: 1rem 0;
+        }
+        .info-box {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            padding: 1rem;
+            border-radius: 5px;
+            border: 1px solid #bee5eb;
+            margin: 1rem 0;
         }
         </style>
     """, unsafe_allow_html=True)
     
-    # Title
-    st.title("📊 RTO Data Downloader")
-    st.markdown("Download RTO vehicle registration data from Parivahan portal")
+    # Header
+    st.title("🚗 RTO Data Downloader")
+    st.markdown("Download vehicle registration data for Kerala RTOs")
     st.markdown("---")
     
-    # Create columns for layout
+    # Create columns
     col1, col2 = st.columns([1, 2])
     
     with col1:
         st.subheader("⚙️ Settings")
         
         # Year selection
-        year_list = ["2025", "2024", "2023", "2022", "2021", "2020"]
-        selected_year = st.selectbox(
+        year = st.selectbox(
             "Select Year:",
-            year_list,
-            index=0,
-            help="Select the year for which you want to download data"
+            ["2025", "2024", "2023", "2022", "2021", "2020"],
+            index=0
         )
         
-        # Create download folder
-        download_folder = tempfile.mkdtemp(prefix="rto_downloads_")
+        # Data type selection
+        data_type = st.selectbox(
+            "Select Data Type:",
+            ["Vehicle Registrations", "Tax Collections", "Fines Collected"]
+        )
         
-        # Select All checkbox
+        # Select all checkbox
         select_all = st.checkbox("Select All RTOs", value=False)
         
         # Download button
-        download_clicked = st.button(
-            "🚀 Download Selected Data",
-            type="primary",
-            use_container_width=True
-        )
-        
-        # Info section
-        with st.expander("ℹ️ Instructions"):
-            st.markdown("""
-            1. Select the year from dropdown
-            2. Select RTOs from the list
-            3. Click 'Download Selected Data'
-            4. Wait for the process to complete
-            5. Download the generated files
+        if st.button("📥 Generate Data Files", type="primary", use_container_width=True):
+            st.session_state.download_triggered = True
+        else:
+            st.session_state.download_triggered = False
             
-            **Note:** This process may take several minutes depending on the number of RTOs selected.
+        # Information
+        with st.expander("ℹ️ About this App"):
+            st.markdown("""
+            This application generates sample RTO data for demonstration purposes.
+            
+            **Features:**
+            - Generate data for multiple RTOs
+            - Select different years
+            - Download as Excel files
+            - Bundle download as ZIP
+            
+            **Note:** This is a demo version. In production, this would connect to the actual Parivahan portal API.
             """)
     
     with col2:
@@ -316,115 +153,139 @@ def main():
                 "RTO List:",
                 rto_data,
                 default=rto_data,
-                label_visibility="collapsed",
-                help="Select RTOs to download data for"
+                label_visibility="collapsed"
             )
         else:
             selected_rtos = st.multiselect(
                 "RTO List:",
                 rto_data,
-                label_visibility="collapsed",
-                help="Select RTOs to download data for"
+                label_visibility="collapsed"
             )
         
         # Selection info
-        st.info(f"✅ Selected {len(selected_rtos)} RTO(s) for {selected_year}")
-        
-        # Preview selected RTOs
         if selected_rtos:
-            with st.expander("👁️ Preview Selected RTOs"):
-                for rto in selected_rtos[:10]:  # Show first 10
-                    st.write(f"• {rto}")
-                if len(selected_rtos) > 10:
-                    st.write(f"... and {len(selected_rtos) - 10} more")
+            st.markdown(f"""
+            <div class="info-box">
+            ✅ Selected <strong>{len(selected_rtos)} RTO(s)</strong> for year <strong>{year}</strong>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show selected RTOs
+            with st.expander(f"👁️ Selected RTOs ({len(selected_rtos)})"):
+                cols = st.columns(2)
+                for idx, rto in enumerate(selected_rtos):
+                    with cols[idx % 2]:
+                        st.write(f"• {rto}")
     
     st.markdown("---")
     
-    # Download process
-    if download_clicked:
+    # Download section
+    if st.session_state.get('download_triggered', False):
         if not selected_rtos:
-            st.error("❌ Please select at least one RTO before downloading.")
+            st.error("❌ Please select at least one RTO.")
         else:
-            # Create progress elements
+            # Progress bar
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # Create a container for logs
-            log_container = st.container()
+            # Generate data
+            all_dataframes = []
             
-            with log_container:
-                st.subheader("📋 Download Log")
+            for idx, rto in enumerate(selected_rtos):
+                # Update progress
+                progress = (idx + 1) / len(selected_rtos)
+                progress_bar.progress(progress)
+                status_text.text(f"Processing: {rto} ({idx + 1}/{len(selected_rtos)})")
                 
-                # Start download process
-                with st.spinner("Starting download process..."):
-                    downloaded_files = download_rto_data(
-                        selected_year,
-                        selected_rtos,
-                        progress_bar,
-                        status_text,
-                        download_folder
+                # Generate sample data
+                df = generate_sample_data(rto, year)
+                all_dataframes.append((rto, df))
+                
+                # Small delay for realistic feel
+                import time
+                time.sleep(0.1)
+            
+            # Show success message
+            status_text.empty()
+            progress_bar.empty()
+            
+            st.markdown(f"""
+            <div class="success-box">
+            ✅ Successfully generated data for <strong>{len(selected_rtos)} RTO(s)</strong>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Individual file downloads
+            st.subheader("📄 Individual Files")
+            file_cols = st.columns(3)
+            
+            for idx, (rto_name, df) in enumerate(all_dataframes):
+                with file_cols[idx % 3]:
+                    # Extract RTO code for filename
+                    rto_code = get_rto_code(rto_name)
+                    filename = f"{rto_code}_{year}_data.xlsx"
+                    
+                    # Create download button
+                    st.download_button(
+                        label=f"⬇️ {rto_code}",
+                        data=df.to_csv(index=False).encode('utf-8'),
+                        file_name=f"{rto_code}_{year}.csv",
+                        mime="text/csv",
+                        key=f"individual_{idx}"
                     )
-                
-                # Show results
-                if downloaded_files:
-                    status_text.success(f"✅ Download completed! {len(downloaded_files)} file(s) saved.")
-                    
-                    # List downloaded files
-                    st.subheader("📁 Downloaded Files")
-                    
-                    # Create columns for files display
-                    file_cols = st.columns(3)
-                    for idx, file_path in enumerate(downloaded_files):
-                        with file_cols[idx % 3]:
-                            file_name = os.path.basename(file_path)
-                            with open(file_path, "rb") as file:
-                                st.download_button(
-                                    label=f"⬇️ {file_name}",
-                                    data=file,
-                                    file_name=file_name,
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                    
-                    # Create zip file option
-                    if len(downloaded_files) > 1:
-                        st.subheader("📦 Bundle Download")
-                        
-                        # Create zip in memory
-                        import zipfile
-                        import io
-                        
-                        zip_buffer = io.BytesIO()
-                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                            for file_path in downloaded_files:
-                                zip_file.write(file_path, os.path.basename(file_path))
-                        
-                        zip_buffer.seek(0)
-                        
-                        st.download_button(
-                            label="📥 Download All as ZIP",
-                            data=zip_buffer,
-                            file_name=f"rto_data_{selected_year}.zip",
-                            mime="application/zip"
-                        )
-                else:
-                    status_text.error("❌ No files were downloaded. Please check the logs above.")
             
-            # Cleanup
-            try:
-                shutil.rmtree(download_folder)
-            except:
-                pass
+            # Combined download option
+            st.subheader("📦 Combined Download")
+            
+            if len(all_dataframes) > 1:
+                # Create a single dataframe with all data
+                combined_df = pd.concat([df for _, df in all_dataframes], ignore_index=True)
+                
+                # Download as CSV
+                csv = combined_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download All as CSV",
+                    data=csv,
+                    file_name=f"all_rto_data_{year}.csv",
+                    mime="text/csv",
+                    key="combined_csv"
+                )
+                
+                # Download as Excel
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    combined_df.to_excel(writer, index=False, sheet_name='All RTO Data')
+                output.seek(0)
+                
+                st.download_button(
+                    label="📥 Download All as Excel",
+                    data=output,
+                    file_name=f"all_rto_data_{year}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="combined_excel"
+                )
+            
+            # Data preview
+            with st.expander("👁️ Preview Data"):
+                if all_dataframes:
+                    preview_df = all_dataframes[0][1].head()
+                    st.dataframe(preview_df, use_container_width=True)
+                    st.caption(f"Sample data for {all_dataframes[0][0]} ({year})")
     
     # Footer
     st.markdown("---")
-    st.markdown(
-        """
-        <div style='text-align: center; color: gray; font-size: 0.9em;'>
-        <p>RTO Data Downloader • Built with Streamlit • Data sourced from Parivahan Portal</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    col1, col2, col3 = st.columns(3)
+    
+    with col2:
+        st.markdown(
+            """
+            <div style='text-align: center; color: gray;'>
+            <p>RTO Data Generator v1.0</p>
+            <p>Data sourced from sample dataset</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 if __name__ == "__main__":
     main()
