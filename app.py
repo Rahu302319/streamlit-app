@@ -10,6 +10,14 @@ import time
 import shutil
 import zipfile
 import tempfile
+import pandas as pd
+from datetime import datetime
+
+# --- CONFIGURATION ---
+PAGE_TITLE = "Vahan RTO Scraper"
+PAGE_ICON = "🚗"
+
+st.set_page_config(page_title=PAGE_TITLE, page_icon=PAGE_ICON, layout="wide")
 
 # --- RTO DATA ---
 RTO_DATA = [
@@ -81,61 +89,61 @@ def get_driver(download_dir):
     return webdriver.Chrome(service=service, options=chrome_options)
 
 def extract_rto_name(rto_name):
-    # Extract the first part of the RTO name before "SRTO" or "RTO"
     return rto_name.split()[0]
 
-def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text):
+def log_message(log_placeholder, messages, new_msg):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    messages.append(f"[{timestamp}] {new_msg}")
+    # Update the text area with all messages joined by newlines
+    log_placeholder.code("\n".join(messages[-10:]), language="bash") # Keep last 10 lines
+
+def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text, log_placeholder, final_report_placeholder):
     temp_dir = tempfile.mkdtemp()
     driver = None
     downloaded_files = []
+    
+    # Status tracking
+    messages = []
+    report_data = []
 
     try:
+        log_message(log_placeholder, messages, "Initializing Chrome Driver...")
         driver = get_driver(temp_dir)
         driver.set_page_load_timeout(600)
         
         url = "https://vahan.parivahan.gov.in/vahan4dashboard/vahan/view/reportview.xhtml"
+        log_message(log_placeholder, messages, f"Navigating to {url}...")
         driver.get(url)
         
-        status_text.text("Navigating to dashboard...")
+        # Initial Dashboard Click
+        log_message(log_placeholder, messages, "Opening Dashboard...")
+        WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[3]/div/div[3]"))).click()
         
-        # Wait for page to load - Click Dashboard
-        WebDriverWait(driver, 60).until(
-            EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[3]/div/div[3]"))
-        ).click()
-        time.sleep(2)
-
-        # Select State (KL)
-        WebDriverWait(driver, 60).until(
-            EC.presence_of_element_located((By.XPATH, "/html/body/div[3]/div/ul/li[18]"))
-        ).click()
+        # State Selection (KL)
+        log_message(log_placeholder, messages, "Selecting State: Kerala...")
+        WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/div[3]/div/ul/li[18]"))).click()
         time.sleep(3)
 
         total_rtos = len(selected_rtos)
         
         for idx, rto_name in enumerate(selected_rtos):
             try:
-                status_text.text(f"Processing ({idx+1}/{total_rtos}): {rto_name}")
+                status_text.write(f"**Processing ({idx+1}/{total_rtos}):** `{rto_name}`")
                 progress_bar.progress((idx) / total_rtos)
                 
-                # --- RTO Selection Logic ---
+                log_message(log_placeholder, messages, f"Selecting RTO: {rto_name}")
                 
                 # 1. Click Dropdown Arrow
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[4]/div/div[3]"))
-                ).click()
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[4]/div/div[3]"))).click()
                 time.sleep(2)
 
-                # 2. Click The RTO Input Field to open panel
-                dropdown_trigger = WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.ID, "selectedRto"))
-                )
+                # 2. Click Input
+                dropdown_trigger = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "selectedRto")))
                 dropdown_trigger.click()
                 time.sleep(2)
 
-                # 3. Find specific RTO in list
-                options = WebDriverWait(driver, 60).until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#selectedRto_items .ui-selectonemenu-item"))
-                )
+                # 3. Find RTO
+                options = WebDriverWait(driver, 60).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#selectedRto_items .ui-selectonemenu-item")))
                 
                 option_found = False
                 for option in options:
@@ -145,122 +153,96 @@ def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text):
                         break
                 
                 if not option_found:
-                    st.warning(f"RTO {rto_name} not found in list.")
+                    report_data.append({"RTO": rto_name, "Status": "Failed", "Reason": "RTO Not Found in list"})
+                    log_message(log_placeholder, messages, f"Error: {rto_name} not found.")
                     continue
                     
                 time.sleep(2)
 
-                # --- CONFIGURATION LOGIC ---
-
-                # Y Axis -> Maker
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[1]/div/div[3]"))
-                ).click()
-                time.sleep(1)
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "//*[@id='yaxisVar_4']"))
-                ).click()
-                time.sleep(1)
-
-                # X Axis -> Month
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[2]/div/label"))
-                ).click()
-                time.sleep(1)
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "//*[@id='xaxisVar_7']"))
-                ).click()
-                time.sleep(1)
-
-                # Year Selection
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[2]/div[2]/div/label"))
-                ).click()
-                time.sleep(1)
-
-                year_mapping = {
-                    "2025": "//*[@id='selectedYear_1']",
-                    "2024": "//*[@id='selectedYear_2']",
-                    "2023": "//*[@id='selectedYear_3']",
-                    "2022": "//*[@id='selectedYear_4']",
-                    "2021": "//*[@id='selectedYear_5']",
-                    "2020": "//*[@id='selectedYear_6']"
-                }
+                # Configurations
+                log_message(log_placeholder, messages, "Configuring Filters (Maker, Month)...")
                 
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, year_mapping[selected_year]))
-                ).click()
-                time.sleep(2)
+                # Y Axis
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[1]/div/div[3]"))).click()
+                time.sleep(1)
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "//*[@id='yaxisVar_4']"))).click()
+                
+                # X Axis
+                time.sleep(1)
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[2]/div/label"))).click()
+                time.sleep(1)
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "//*[@id='xaxisVar_7']"))).click()
+                
+                # Year
+                time.sleep(1)
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[2]/div[2]/div/label"))).click()
+                time.sleep(1)
 
-                # Refresh Button
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[3]/div/button"))
-                ).click()
+                year_mapping = {"2025": "//*[@id='selectedYear_1']", "2024": "//*[@id='selectedYear_2']", "2023": "//*[@id='selectedYear_3']", "2022": "//*[@id='selectedYear_4']", "2021": "//*[@id='selectedYear_5']", "2020": "//*[@id='selectedYear_6']"}
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, year_mapping[selected_year]))).click()
+                
+                # Refresh
+                time.sleep(2)
+                log_message(log_placeholder, messages, "Refreshing Data...")
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[3]/div/button"))).click()
                 time.sleep(5)
 
-                # Toggle Filters
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[3]/div"))
-                ).click()
+                # Filter Toggle
+                log_message(log_placeholder, messages, "Selecting Vehicle Types (LMV, LPV)...")
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[3]/div"))).click()
                 time.sleep(2)
-
-                # Select LMV
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[12]/td/label"))
-                ).click()
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[12]/td/label"))).click()
                 time.sleep(1)
-
-                # Select LPV
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[13]/td/label"))
-                ).click()
-                time.sleep(1)
-
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[13]/td/label"))).click()
+                
                 # Refresh Table
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[1]/span/button"))
-                ).click()
+                time.sleep(1)
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[1]/span/button"))).click()
                 time.sleep(5)
 
-                # Download Excel
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[2]/div/div/div[1]/div[1]/a/img"))
-                ).click()
+                # Download
+                log_message(log_placeholder, messages, "Downloading Excel File...")
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[2]/div/div/div[1]/div[1]/a/img"))).click()
                 time.sleep(3)
 
-                # --- FILE HANDLING ---
-                # Check for new file in temp_dir
+                # File Management
                 files = os.listdir(temp_dir)
                 xlsx_files = [f for f in files if f.endswith('.xlsx') or f.endswith('.xls')]
                 
                 if xlsx_files:
-                    # Get the most recently created file
                     full_paths = [os.path.join(temp_dir, f) for f in xlsx_files]
                     latest_file = max(full_paths, key=os.path.getctime)
-                    
-                    # Rename logic
                     extracted_name = extract_rto_name(rto_name)
                     new_file_name = f"{extracted_name}_{selected_year}.xlsx"
                     new_file_path = os.path.join(temp_dir, new_file_name)
                     
-                    # Avoid renaming if already renamed (in case of re-runs)
                     if latest_file != new_file_path:
                         shutil.move(latest_file, new_file_path)
                         downloaded_files.append(new_file_path)
-                
-                # Toggle Hide Filter (Clean up for next loop)
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.XPATH, "//*[@id='filterLayout']/div[1]/a"))
-                ).click()
+                    
+                    report_data.append({"RTO": rto_name, "Status": "Success", "File": new_file_name})
+                    log_message(log_placeholder, messages, f"Success: {new_file_name} saved.")
+                else:
+                    report_data.append({"RTO": rto_name, "Status": "Failed", "Reason": "Download timed out"})
+                    log_message(log_placeholder, messages, "Error: File not found.")
+
+                # Cleanup Filter
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "//*[@id='filterLayout']/div[1]/a"))).click()
                 time.sleep(1)
 
             except Exception as e:
-                st.error(f"Error processing {rto_name}: {str(e)}")
-                # Attempt to recover by reloading page? Or just continue
+                report_data.append({"RTO": rto_name, "Status": "Failed", "Reason": str(e)})
+                log_message(log_placeholder, messages, f"Error: {str(e)}")
                 continue
 
         progress_bar.progress(100)
-        status_text.text("Scraping Completed!")
+        status_text.write("**Scraping Completed!**")
+        log_message(log_placeholder, messages, "All tasks finished.")
+        
+        # Update Final Report Table
+        df = pd.DataFrame(report_data)
+        final_report_placeholder.dataframe(df, use_container_width=True)
+        
         return downloaded_files, temp_dir
 
     except Exception as e:
@@ -271,30 +253,54 @@ def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text):
             driver.quit()
 
 # --- STREAMLIT UI ---
-st.title("Vahan Data Scraper (Headless)")
+st.title("🚗 Vahan RTO Data Scraper")
 
-st.sidebar.header("Configuration")
-selected_year = st.sidebar.selectbox("Select Year", ["2025", "2024", "2023", "2022", "2021", "2020"])
+col1, col2 = st.columns([1, 2])
 
-select_all = st.sidebar.checkbox("Select All RTOs")
-if select_all:
-    selected_rtos = st.sidebar.multiselect("Select RTOs", RTO_DATA, default=RTO_DATA)
-else:
-    selected_rtos = st.sidebar.multiselect("Select RTOs", RTO_DATA)
+with col1:
+    st.subheader("Configuration")
+    selected_year = st.selectbox("Select Year", ["2025", "2024", "2023", "2022", "2021", "2020"])
+    
+    # Path Selection Explanation
+    st.info("📂 **Path Selection:**\nDue to browser security, files are downloaded to the cloud server, zipped, and then downloaded to your computer's 'Downloads' folder.")
 
-st.write(f"Selected **{len(selected_rtos)}** RTOs for Year **{selected_year}**")
+    select_all = st.checkbox("Select All RTOs")
+    if select_all:
+        selected_rtos = st.multiselect("Select RTOs", RTO_DATA, default=RTO_DATA)
+    else:
+        selected_rtos = st.multiselect("Select RTOs", RTO_DATA)
+    
+    start_btn = st.button("Start Scraping", type="primary", use_container_width=True)
 
-if st.button("Start Scraping", type="primary"):
+with col2:
+    st.subheader("Live Status Monitor")
+    
+    # Placeholders for dynamic updates
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    # Live Terminal Log
+    st.markdown("**System Logs:**")
+    log_placeholder = st.empty()
+    log_placeholder.code("Waiting to start...", language="bash")
+    
+    st.markdown("**Final Report:**")
+    final_report_placeholder = st.empty()
+
+if start_btn:
     if not selected_rtos:
         st.warning("Please select at least one RTO.")
     else:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        files, temp_dir = scrape_vahan(selected_rtos, selected_year, progress_bar, status_text)
+        files, temp_dir = scrape_vahan(
+            selected_rtos, 
+            selected_year, 
+            progress_bar, 
+            status_text, 
+            log_placeholder,
+            final_report_placeholder
+        )
         
         if files:
-            # Zip the files
             zip_filename = f"RTO_Data_{selected_year}.zip"
             zip_path = os.path.join(temp_dir, zip_filename)
             
@@ -302,14 +308,13 @@ if st.button("Start Scraping", type="primary"):
                 for file in files:
                     zipf.write(file, os.path.basename(file))
             
-            # Create Download Button
             with open(zip_path, "rb") as f:
                 st.download_button(
-                    label="📥 Download All Files (ZIP)",
+                    label="📥 Download Result (ZIP)",
                     data=f,
                     file_name=zip_filename,
-                    mime="application/zip"
+                    mime="application/zip",
+                    type="secondary",
+                    use_container_width=True
                 )
-            st.success(f"Successfully downloaded {len(files)} files.")
-        else:
-            st.error("No files were downloaded. Please check the logs.")
+            st.success(f"Successfully scraped {len(files)} files!")
