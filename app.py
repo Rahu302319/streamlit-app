@@ -5,7 +5,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 import os
 import time
 import shutil
@@ -62,25 +61,31 @@ RTO_DATA = [
 # --- HELPER FUNCTIONS ---
 def get_driver(download_dir):
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # MUST be headless for Streamlit Cloud
+    
+    # --- CRITICAL FIX: HARDCODE PATHS FOR STREAMLIT CLOUD ---
+    chrome_options.binary_location = "/usr/bin/chromium"
+    
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    # Set default download directory for the browser
+    # Set default download directory
     prefs = {"download.default_directory": download_dir}
     chrome_options.add_experimental_option("prefs", prefs)
     
-    service = Service(ChromeDriverManager().install())
+    # Use system installed chromedriver
+    service = Service("/usr/bin/chromedriver")
+    
     return webdriver.Chrome(service=service, options=chrome_options)
 
 def extract_rto_name(rto_name):
+    # Extract the first part of the RTO name before "SRTO" or "RTO"
     return rto_name.split()[0]
 
 def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text):
-    # Create a temporary directory for this session
     temp_dir = tempfile.mkdtemp()
-    
     driver = None
     downloaded_files = []
 
@@ -93,50 +98,86 @@ def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text):
         
         status_text.text("Navigating to dashboard...")
         
-        # Click Dashboard
-        WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[3]/div/div[3]"))).click()
+        # Wait for page to load - Click Dashboard
+        WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[3]/div/div[3]"))
+        ).click()
         time.sleep(2)
 
-        # Select State (Assuming Kerala from your original code index 18)
-        WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[3]/div/ul/li[18]"))).click()
+        # Select State (KL)
+        WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, "/html/body/div[3]/div/ul/li[18]"))
+        ).click()
         time.sleep(3)
 
-        # Loop through RTOs
         total_rtos = len(selected_rtos)
         
         for idx, rto_name in enumerate(selected_rtos):
             try:
                 status_text.text(f"Processing ({idx+1}/{total_rtos}): {rto_name}")
                 progress_bar.progress((idx) / total_rtos)
+                
+                # --- RTO Selection Logic ---
+                
+                # 1. Click Dropdown Arrow
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[2]/div[4]/div/div[3]"))
+                ).click()
+                time.sleep(2)
 
-                # Open Dropdown
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.ID, "selectedRto"))).click()
-                time.sleep(1)
+                # 2. Click The RTO Input Field to open panel
+                dropdown_trigger = WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.ID, "selectedRto"))
+                )
+                dropdown_trigger.click()
+                time.sleep(2)
 
-                # Select Specific RTO
-                options = WebDriverWait(driver, 30).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#selectedRto_items .ui-selectonemenu-item")))
+                # 3. Find specific RTO in list
+                options = WebDriverWait(driver, 60).until(
+                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#selectedRto_items .ui-selectonemenu-item"))
+                )
+                
+                option_found = False
                 for option in options:
                     if option.text.strip() == rto_name:
                         option.click()
+                        option_found = True
                         break
+                
+                if not option_found:
+                    st.warning(f"RTO {rto_name} not found in list.")
+                    continue
+                    
                 time.sleep(2)
 
-                # Click Y Axis -> Maker
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[1]/div/div[3]"))).click()
+                # --- CONFIGURATION LOGIC ---
+
+                # Y Axis -> Maker
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[1]/div/div[3]"))
+                ).click()
                 time.sleep(1)
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//*[@id='yaxisVar_4']"))).click()
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "//*[@id='yaxisVar_4']"))
+                ).click()
                 time.sleep(1)
 
-                # Click X Axis -> Month
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[2]/div/label"))).click()
+                # X Axis -> Month
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[1]/div[2]/div/label"))
+                ).click()
                 time.sleep(1)
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//*[@id='xaxisVar_7']"))).click()
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "//*[@id='xaxisVar_7']"))
+                ).click()
                 time.sleep(1)
 
-                # Select Year
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[2]/div[2]/div/label"))).click()
+                # Year Selection
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[2]/div[2]/div[2]/div/label"))
+                ).click()
                 time.sleep(1)
-                
+
                 year_mapping = {
                     "2025": "//*[@id='selectedYear_1']",
                     "2024": "//*[@id='selectedYear_2']",
@@ -145,74 +186,93 @@ def scrape_vahan(selected_rtos, selected_year, progress_bar, status_text):
                     "2021": "//*[@id='selectedYear_5']",
                     "2020": "//*[@id='selectedYear_6']"
                 }
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, year_mapping[selected_year]))).click()
+                
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, year_mapping[selected_year]))
+                ).click()
                 time.sleep(2)
 
-                # Refresh 1
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[3]/div/button"))).click()
-                time.sleep(4)
+                # Refresh Button
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[1]/div[3]/div[3]/div/button"))
+                ).click()
+                time.sleep(5)
 
-                # Open Filter Toggle
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[3]/div"))).click()
+                # Toggle Filters
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[3]/div"))
+                ).click()
                 time.sleep(2)
 
-                # Select LMV and LPV
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[12]/td/label"))).click()
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[13]/td/label"))).click()
+                # Select LMV
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[12]/td/label"))
+                ).click()
                 time.sleep(1)
 
-                # Refresh 2
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[1]/span/button"))).click()
-                time.sleep(4)
+                # Select LPV
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[2]/div/div/div[1]/div/div/div/table/tbody/tr[13]/td/label"))
+                ).click()
+                time.sleep(1)
 
-                # Download
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[2]/div/div/div[1]/div[1]/a/img"))).click()
-                
-                # Wait for download to complete
-                time.sleep(5) 
+                # Refresh Table
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[1]/div[1]/span/button"))
+                ).click()
+                time.sleep(5)
 
-                # Rename and Move
+                # Download Excel
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "/html/body/form/div[2]/div/div/div[3]/div/div[2]/div/div/div[1]/div[1]/a/img"))
+                ).click()
+                time.sleep(3)
+
+                # --- FILE HANDLING ---
+                # Check for new file in temp_dir
                 files = os.listdir(temp_dir)
                 xlsx_files = [f for f in files if f.endswith('.xlsx') or f.endswith('.xls')]
                 
-                # Sort by creation time to get the newest
                 if xlsx_files:
+                    # Get the most recently created file
                     full_paths = [os.path.join(temp_dir, f) for f in xlsx_files]
                     latest_file = max(full_paths, key=os.path.getctime)
                     
-                    short_name = extract_rto_name(rto_name)
-                    new_name = f"{short_name}_{selected_year}.xlsx"
-                    new_path = os.path.join(temp_dir, new_name)
+                    # Rename logic
+                    extracted_name = extract_rto_name(rto_name)
+                    new_file_name = f"{extracted_name}_{selected_year}.xlsx"
+                    new_file_path = os.path.join(temp_dir, new_file_name)
                     
-                    # If we haven't already renamed this specific file
-                    if latest_file != new_path:
-                        os.rename(latest_file, new_path)
-                        downloaded_files.append(new_path)
+                    # Avoid renaming if already renamed (in case of re-runs)
+                    if latest_file != new_file_path:
+                        shutil.move(latest_file, new_file_path)
+                        downloaded_files.append(new_file_path)
                 
-                # Clean up UI (Toggle Hide) for next loop
-                WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//*[@id='filterLayout']/div[1]/a"))).click()
+                # Toggle Hide Filter (Clean up for next loop)
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located((By.XPATH, "//*[@id='filterLayout']/div[1]/a"))
+                ).click()
                 time.sleep(1)
 
             except Exception as e:
                 st.error(f"Error processing {rto_name}: {str(e)}")
+                # Attempt to recover by reloading page? Or just continue
                 continue
 
         progress_bar.progress(100)
         status_text.text("Scraping Completed!")
-        
         return downloaded_files, temp_dir
 
     except Exception as e:
-        st.error(f"Critical Error: {str(e)}")
+        st.error(f"Critical System Error: {str(e)}")
         return [], temp_dir
     finally:
         if driver:
             driver.quit()
 
 # --- STREAMLIT UI ---
-st.title("🚗 Vahan RTO Data Downloader")
+st.title("Vahan Data Scraper (Headless)")
 
-# Sidebar inputs
 st.sidebar.header("Configuration")
 selected_year = st.sidebar.selectbox("Select Year", ["2025", "2024", "2023", "2022", "2021", "2020"])
 
@@ -222,8 +282,7 @@ if select_all:
 else:
     selected_rtos = st.sidebar.multiselect("Select RTOs", RTO_DATA)
 
-# Main Area
-st.write(f"You have selected **{len(selected_rtos)}** RTOs for the year **{selected_year}**.")
+st.write(f"Selected **{len(selected_rtos)}** RTOs for Year **{selected_year}**")
 
 if st.button("Start Scraping", type="primary"):
     if not selected_rtos:
@@ -235,7 +294,7 @@ if st.button("Start Scraping", type="primary"):
         files, temp_dir = scrape_vahan(selected_rtos, selected_year, progress_bar, status_text)
         
         if files:
-            # Create a ZIP file of all downloaded data
+            # Zip the files
             zip_filename = f"RTO_Data_{selected_year}.zip"
             zip_path = os.path.join(temp_dir, zip_filename)
             
@@ -243,7 +302,7 @@ if st.button("Start Scraping", type="primary"):
                 for file in files:
                     zipf.write(file, os.path.basename(file))
             
-            # Read Zip file into memory for download button
+            # Create Download Button
             with open(zip_path, "rb") as f:
                 st.download_button(
                     label="📥 Download All Files (ZIP)",
@@ -251,10 +310,6 @@ if st.button("Start Scraping", type="primary"):
                     file_name=zip_filename,
                     mime="application/zip"
                 )
-            
-            st.success(f"Successfully scraped {len(files)} files!")
+            st.success(f"Successfully downloaded {len(files)} files.")
         else:
             st.error("No files were downloaded. Please check the logs.")
-        
-        # Cleanup is tricky in web apps, usually temp dirs are cleaned by OS, 
-        # but we can try to clean up if we want, strictly after the download button is generated.
